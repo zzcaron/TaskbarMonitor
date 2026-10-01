@@ -28,12 +28,11 @@ except Exception:
 
 
 def format_bytes_speed(bytes_per_sec):
-    """格式化传输速率为易读字符串 (B/s, KB/s, MB/s, GB/s)"""
+    """格式化传输速率为易读字符串 (去掉 B/s，统一以 KB/s、MB/s、GB/s 自适应显示)"""
     if bytes_per_sec < 0:
         bytes_per_sec = 0
-    if bytes_per_sec < 1024:
-        return f"{int(bytes_per_sec)} B/s"
-    elif bytes_per_sec < 1024 * 1024:
+    if bytes_per_sec < 1024 * 1024:
+        # 小于 1MB/s 均以 KB/s 显示（例如 0.0 KB/s、25.8 KB/s）
         return f"{bytes_per_sec / 1024:.1f} KB/s"
     elif bytes_per_sec < 1024 * 1024 * 1024:
         return f"{bytes_per_sec / (1024 * 1024):.1f} MB/s"
