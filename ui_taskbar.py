@@ -109,10 +109,10 @@ class TaskbarMonitorWidget(QWidget):
         self.apply_theme()
         self.update_layout_visibility()
 
-        # 定位定时器：自动检测托盘变动并强力维持置顶
+        # 定位定时器：高频极速检测托盘变动并强力维持置顶（0.3秒平滑守护，告别任何消失感）
         self.pos_timer = QTimer(self)
         self.pos_timer.timeout.connect(self.align_to_taskbar)
-        self.pos_timer.start(1000)
+        self.pos_timer.start(300)
 
         # 存储当前最新监控指标用于 Tooltip 显示
         self.latest_metrics = None
@@ -136,9 +136,9 @@ class TaskbarMonitorWidget(QWidget):
         self.container_layout.setContentsMargins(8, 2, 8, 2)
         self.container_layout.setSpacing(6)
 
-        # 1. 网络列 (定宽 86px，数值无论如何变化绝对不抖动推移后方控件)
+        # 1. 网络列 (定宽 78px，紧凑防抖)
         self.net_col_widget = QWidget(self)
-        self.net_col_widget.setFixedWidth(86)
+        self.net_col_widget.setFixedWidth(78)
         net_col = QVBoxLayout(self.net_col_widget)
         net_col.setContentsMargins(0, 0, 0, 0)
         net_col.setSpacing(1)
@@ -147,9 +147,9 @@ class TaskbarMonitorWidget(QWidget):
         net_col.addWidget(self.item_upload)
         net_col.addWidget(self.item_download)
 
-        # 2. 磁盘列 (定宽 92px)
+        # 2. 磁盘列 (定宽 84px)
         self.disk_col_widget = QWidget(self)
-        self.disk_col_widget.setFixedWidth(92)
+        self.disk_col_widget.setFixedWidth(84)
         disk_col = QVBoxLayout(self.disk_col_widget)
         disk_col.setContentsMargins(0, 0, 0, 0)
         disk_col.setSpacing(1)
@@ -158,9 +158,9 @@ class TaskbarMonitorWidget(QWidget):
         disk_col.addWidget(self.item_disk_read)
         disk_col.addWidget(self.item_disk_write)
 
-        # 3. 核心硬件列 (定宽 106px)
+        # 3. 核心硬件列 (定宽 96px)
         self.chip_col_widget = QWidget(self)
-        self.chip_col_widget.setFixedWidth(106)
+        self.chip_col_widget.setFixedWidth(96)
         chip_col = QVBoxLayout(self.chip_col_widget)
         chip_col.setContentsMargins(0, 0, 0, 0)
         chip_col.setSpacing(1)
@@ -169,9 +169,9 @@ class TaskbarMonitorWidget(QWidget):
         chip_col.addWidget(self.item_cpu)
         chip_col.addWidget(self.item_gpu)
 
-        # 4. 内存列 (定宽 68px)
+        # 4. 内存列 (定宽 62px)
         self.ram_col_widget = QWidget(self)
-        self.ram_col_widget.setFixedWidth(68)
+        self.ram_col_widget.setFixedWidth(62)
         ram_col = QVBoxLayout(self.ram_col_widget)
         ram_col.setContentsMargins(0, 0, 0, 0)
         ram_col.setSpacing(1)
@@ -254,10 +254,10 @@ class TaskbarMonitorWidget(QWidget):
 
         # 2. 精确固定列宽映射
         COL_WIDTHS = {
-            "net": 86,
-            "disk": 92,
-            "chip": 106,
-            "ram": 68
+            "net": 78,
+            "disk": 84,
+            "chip": 96,
+            "ram": 62
         }
 
         active_cols = []
@@ -293,18 +293,25 @@ class TaskbarMonitorWidget(QWidget):
 
     def align_to_taskbar(self):
         """精准对齐到任务栏托盘左边缘并强力维持置顶防遮挡"""
-        # 若处于截屏状态且开启了截屏定格，避免抢占置顶破坏截图遮罩
-        if self.cfg.get("freeze_on_screenshot", True) and is_screenshot_active():
-            return
+        # 截屏时自动退避隐藏：杜绝截图工具底图快照与悬浮窗产生的双层重影/重叠
+        if self.cfg.get("freeze_on_screenshot", True):
+            if is_screenshot_active():
+                if self.isVisible():
+                    self.hide()
+                return
+            else:
+                if not self.isVisible():
+                    self.show()
 
         x, y, w, h = calculate_window_rect(self.width(), self.offset_x)
         margin_y = max(1, (h - self.height()) // 2)
         real_y = y + margin_y
 
-        # 1. 先通过 Qt 原生移动到目标屏幕坐标
-        self.move(x, real_y)
+        # 1. 位置发生变动时才调用 Qt 原生移动，减少不必要的重绘
+        if self.x() != x or self.y() != real_y:
+            self.move(x, real_y)
 
-        # 2. 再调用底层 Windows API 强力维持 HWND_TOPMOST 顶层状态
+        # 2. 调用底层 Windows API 强力维持 HWND_TOPMOST 顶层状态，防止被任务栏或新窗口压下
         hwnd = int(self.winId())
         if hwnd:
             import ctypes
@@ -320,8 +327,10 @@ class TaskbarMonitorWidget(QWidget):
 
     def update_metrics(self, m):
         """接收后台采样的系统指标并刷新 UI"""
-        # 截屏时自动定格：如果系统正处于截图状态，跳过数值刷新，保持当前画面定格
+        # 截屏时自动退避隐藏：如果系统正处于截图状态，隐藏窗口并不刷新数值，保证零重叠零动静
         if self.cfg.get("freeze_on_screenshot", True) and is_screenshot_active():
+            if self.isVisible():
+                self.hide()
             return
 
         self.latest_metrics = m

@@ -31,7 +31,7 @@ cmd = [
     "-y",
     "--noconsole",
     "--onedir",
-    "--name=TaskbarMonitor-V1.2",
+    "--name=TaskbarMonitor-V1.3",
     f"--distpath={dist_dir}",
     f"--workpath={build_dir}",
     f"--specpath={spec_dir}",
@@ -43,10 +43,10 @@ cmd = [
     main_py
 ]
 
-print("开始打包 TaskbarMonitor-V1.2...")
+print("开始打包 TaskbarMonitor-V1.3...")
 result = subprocess.run(cmd)
 if result.returncode == 0:
-    target_exe = os.path.join(dist_dir, "TaskbarMonitor-V1.2", "TaskbarMonitor-V1.2.exe")
+    target_exe = os.path.join(dist_dir, "TaskbarMonitor-V1.3", "TaskbarMonitor-V1.3.exe")
     print(f"\n[打包成功] 生成可执行文件: {target_exe}")
 else:
     print(f"\n[打包失败] 退出码: {result.returncode}")
