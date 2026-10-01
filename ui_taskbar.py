@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal
 from PyQt5.QtGui import QFont, QCursor, QColor
 
 from monitor import format_bytes_speed
-from taskbar_helper import calculate_window_rect, setup_taskbar_window_style, is_screenshot_active
+from taskbar_helper import calculate_window_rect, setup_taskbar_window_style, is_screenshot_active, is_fullscreen_active
 from autostart import is_autostart_enabled, set_autostart
 from config import load_config, save_config
 from ui_settings import SettingsDialog
@@ -293,25 +293,39 @@ class TaskbarMonitorWidget(QWidget):
 
     def align_to_taskbar(self):
         """精准对齐到任务栏托盘左边缘并强力维持置顶防遮挡"""
-        # 截屏时自动退避隐藏：杜绝截图工具底图快照与悬浮窗产生的双层重影/重叠
-        if self.cfg.get("freeze_on_screenshot", True):
-            if is_screenshot_active():
-                if self.isVisible():
-                    self.hide()
-                return
-            else:
-                if not self.isVisible():
-                    self.show()
+        # 1. 截屏或全屏独占程序（游戏/观影）时自动退避隐藏，退出全屏或截屏瞬间恢复
+        should_hide = False
+        if self.cfg.get("freeze_on_screenshot", True) and is_screenshot_active():
+            should_hide = True
+        elif self.cfg.get("hide_on_fullscreen", True) and is_fullscreen_active():
+            should_hide = True
 
-        x, y, w, h = calculate_window_rect(self.width(), self.offset_x)
-        margin_y = max(1, (h - self.height()) // 2)
-        real_y = y + margin_y
+        if should_hide:
+            if self.isVisible():
+                self.hide()
+            return
+        else:
+            if not self.isVisible():
+                self.show()
 
-        # 1. 位置发生变动时才调用 Qt 原生移动，减少不必要的重绘
-        if self.x() != x or self.y() != real_y:
-            self.move(x, real_y)
+        # 计算任务栏上的物理像素坐标 (phys_x, phys_y, w, h)
+        phys_x, phys_y, phys_w, phys_h = calculate_window_rect(self.width(), self.offset_x)
+        margin_y = max(1, (phys_h - self.height()) // 2)
+        real_phys_y = phys_y + margin_y
 
-        # 2. 调用底层 Windows API 强力维持 HWND_TOPMOST 顶层状态，防止被任务栏或新窗口压下
+        # 获取当前窗口的 DPI 缩放比例（支持 100%、125%、150%、200% 等非标高分屏）
+        dpi_ratio = self.devicePixelRatioF() if hasattr(self, 'devicePixelRatioF') else 1.0
+        if dpi_ratio <= 0:
+            dpi_ratio = 1.0
+
+        qt_x = int(phys_x / dpi_ratio)
+        qt_y = int(real_phys_y / dpi_ratio)
+
+        # 2. 逻辑坐标发生变动时才调用 Qt 原生移动，减少不必要的重绘
+        if self.x() != qt_x or self.y() != qt_y:
+            self.move(qt_x, qt_y)
+
+        # 3. 调用底层 Windows API SetWindowPos（使用物理像素）强力维持 HWND_TOPMOST 顶层状态
         hwnd = int(self.winId())
         if hwnd:
             import ctypes
@@ -321,14 +335,18 @@ class TaskbarMonitorWidget(QWidget):
             SWP_SHOWWINDOW = 0x0040
             user32.SetWindowPos(
                 hwnd, HWND_TOPMOST,
-                x, real_y, self.width(), self.height(),
+                phys_x, real_phys_y, int(self.width() * dpi_ratio), int(self.height() * dpi_ratio),
                 SWP_NOACTIVATE | SWP_SHOWWINDOW
             )
 
     def update_metrics(self, m):
         """接收后台采样的系统指标并刷新 UI"""
-        # 截屏时自动退避隐藏：如果系统正处于截图状态，隐藏窗口并不刷新数值，保证零重叠零动静
+        # 截屏或全屏隐藏状态下：跳过数值更新与重绘，保持静默零开销
         if self.cfg.get("freeze_on_screenshot", True) and is_screenshot_active():
+            if self.isVisible():
+                self.hide()
+            return
+        if self.cfg.get("hide_on_fullscreen", True) and is_fullscreen_active():
             if self.isVisible():
                 self.hide()
             return
@@ -387,15 +405,35 @@ class TaskbarMonitorWidget(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.drag_start_pos = event.globalPos() - self.pos()
+            self._has_dragged = False
         elif event.button() == Qt.RightButton:
             self.show_context_menu(event.globalPos())
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton and self.drag_start_pos:
             new_pos = event.globalPos() - self.drag_start_pos
+            if (new_pos - self.pos()).manhattanLength() > 2:
+                self._has_dragged = True
             self.move(new_pos.x(), self.y())
             self.pos_timer.stop()
-            self.pos_timer.start(5000)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and getattr(self, '_has_dragged', False):
+            self._has_dragged = False
+            # 计算基准物理位置（offset_x=0 时的理论横坐标）
+            base_phys_x, _, _, _ = calculate_window_rect(self.width(), 0)
+            dpi_ratio = self.devicePixelRatioF() if hasattr(self, 'devicePixelRatioF') else 1.0
+            if dpi_ratio <= 0:
+                dpi_ratio = 1.0
+            base_qt_x = int(base_phys_x / dpi_ratio)
+            # 反算用户手动拖动产生的新偏好偏移 offset_x
+            new_offset_x = self.x() - base_qt_x
+            new_offset_x = max(-800, min(300, new_offset_x))
+            self.offset_x = new_offset_x
+            self.cfg["offset_x"] = new_offset_x
+            save_config(self.cfg)
+
+        self.pos_timer.start(300)
 
     def mouseDoubleClickEvent(self, event):
         """双击打开任务管理器"""
@@ -471,6 +509,12 @@ class TaskbarMonitorWidget(QWidget):
         action_freeze.triggered.connect(self._toggle_freeze_screenshot)
         menu.addAction(action_freeze)
 
+        # 全屏游戏/观影自动隐藏
+        action_fullscreen = QAction("全屏游戏或视频时自动隐藏", menu, checkable=True)
+        action_fullscreen.setChecked(self.cfg.get("hide_on_fullscreen", True))
+        action_fullscreen.triggered.connect(self._toggle_hide_on_fullscreen)
+        menu.addAction(action_fullscreen)
+
         # 开机自启
         action_autostart = QAction("开机自动启动", menu, checkable=True)
         action_autostart.setChecked(is_autostart_enabled())
@@ -484,7 +528,7 @@ class TaskbarMonitorWidget(QWidget):
 
         # 重新对齐
         action_realign = QAction("重新对齐到任务栏托盘", menu)
-        action_realign.triggered.connect(self.align_to_taskbar)
+        action_realign.triggered.connect(self.reset_align_to_taskbar)
         menu.addAction(action_realign)
 
         menu.addSeparator()
@@ -496,6 +540,14 @@ class TaskbarMonitorWidget(QWidget):
 
         menu.exec_(pos)
 
+    def reset_align_to_taskbar(self):
+        """用户点击菜单重新对齐：重置所有拖动偏移量为初始默认值，并立即吸附归位"""
+        DEFAULT_OFFSET_X = -4
+        self.offset_x = DEFAULT_OFFSET_X
+        self.cfg["offset_x"] = DEFAULT_OFFSET_X
+        save_config(self.cfg)
+        self.align_to_taskbar()
+
     def _toggle_display_item(self, key, checked):
         """快捷切换单个显示项"""
         self.cfg[key] = checked
@@ -506,6 +558,12 @@ class TaskbarMonitorWidget(QWidget):
         """快捷切换截屏定格"""
         self.cfg["freeze_on_screenshot"] = checked
         save_config(self.cfg)
+
+    def _toggle_hide_on_fullscreen(self, checked):
+        """快捷切换全屏隐藏"""
+        self.cfg["hide_on_fullscreen"] = checked
+        save_config(self.cfg)
+        self.align_to_taskbar()
 
     def _set_bg_style(self, style_name):
         """快捷切换背景模式"""

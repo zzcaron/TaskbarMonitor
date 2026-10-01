@@ -111,7 +111,7 @@ def main():
     tray_menu.addSeparator()
 
     action_realign = QAction("重新对齐到任务栏托盘", tray_menu)
-    action_realign.triggered.connect(monitor_window.align_to_taskbar)
+    action_realign.triggered.connect(monitor_window.reset_align_to_taskbar)
     tray_menu.addAction(action_realign)
 
     tray_menu.addSeparator()

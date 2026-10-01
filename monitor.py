@@ -92,6 +92,11 @@ class MonitorWorker(QThread):
             except Exception:
                 pass
 
+        # WMI 降级温度查询缓存与降频控制（杜绝频繁创建 COM 造成 CPU 负担）
+        self._wmi_server = None
+        self._wmi_last_check = 0.0
+        self._wmi_unsupported = False
+
     def run(self):
         # 预热 CPU 占用率采样
         psutil.cpu_percent(interval=None)
@@ -116,13 +121,24 @@ class MonitorWorker(QThread):
         if dt <= 0:
             dt = 1.0
 
+        # 检测是否经历系统休眠唤醒或严重卡顿挂起（dt 超过正常采样间隔的 5 倍）
+        is_waking_up = (dt > max(5.0, self.interval * 4))
+
         metrics = SystemMetrics()
 
         # 1. 网络上下行速率
         try:
             current_net = psutil.net_io_counters()
-            metrics.upload_speed = (current_net.bytes_sent - self._last_net.bytes_sent) / dt
-            metrics.download_speed = (current_net.bytes_recv - self._last_net.bytes_recv) / dt
+            if current_net and self._last_net:
+                # 若经历休眠唤醒或网卡计数器被系统清零重置，重置基准避免暴增
+                if (is_waking_up or 
+                    current_net.bytes_sent < self._last_net.bytes_sent or 
+                    current_net.bytes_recv < self._last_net.bytes_recv):
+                    metrics.upload_speed = 0.0
+                    metrics.download_speed = 0.0
+                else:
+                    metrics.upload_speed = (current_net.bytes_sent - self._last_net.bytes_sent) / dt
+                    metrics.download_speed = (current_net.bytes_recv - self._last_net.bytes_recv) / dt
             self._last_net = current_net
         except Exception:
             pass
@@ -131,8 +147,14 @@ class MonitorWorker(QThread):
         try:
             current_disk = psutil.disk_io_counters()
             if current_disk and self._last_disk:
-                metrics.disk_read_speed = (current_disk.read_bytes - self._last_disk.read_bytes) / dt
-                metrics.disk_write_speed = (current_disk.write_bytes - self._last_disk.write_bytes) / dt
+                if (is_waking_up or 
+                    current_disk.read_bytes < self._last_disk.read_bytes or 
+                    current_disk.write_bytes < self._last_disk.write_bytes):
+                    metrics.disk_read_speed = 0.0
+                    metrics.disk_write_speed = 0.0
+                else:
+                    metrics.disk_read_speed = (current_disk.read_bytes - self._last_disk.read_bytes) / dt
+                    metrics.disk_write_speed = (current_disk.write_bytes - self._last_disk.write_bytes) / dt
             self._last_disk = current_disk
         except Exception:
             pass
@@ -221,17 +243,29 @@ class MonitorWorker(QThread):
             except Exception:
                 pass
 
-        # 若未成功获取 CPU 温度，尝试降级查询 WMI ACPI ThermalZone
-        if not collected_cpu_temp:
-            try:
-                import win32com.client
-                locator = win32com.client.Dispatch('WbemScripting.SWbemLocator')
-                server = locator.ConnectServer('.', 'root\\wmi')
-                zones = server.ExecQuery('SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature')
-                for z in zones:
-                    temp_c = z.CurrentTemperature / 10.0 - 273.15
-                    if 10.0 < temp_c < 115.0:
-                        metrics.cpu_temp = temp_c
-                        break
-            except Exception:
-                pass
+        # 若未成功获取 CPU 温度，尝试降级查询 WMI ACPI ThermalZone（单例复用与降频控制）
+        if not collected_cpu_temp and not self._wmi_unsupported:
+            now_t = time.time()
+            if now_t - self._wmi_last_check >= 15.0:
+                self._wmi_last_check = now_t
+                try:
+                    if self._wmi_server is None:
+                        import win32com.client
+                        locator = win32com.client.Dispatch('WbemScripting.SWbemLocator')
+                        self._wmi_server = locator.ConnectServer('.', 'root\\wmi')
+
+                    zones = self._wmi_server.ExecQuery('SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature')
+                    has_temp = False
+                    for z in zones:
+                        temp_c = z.CurrentTemperature / 10.0 - 273.15
+                        if 10.0 < temp_c < 115.0:
+                            metrics.cpu_temp = temp_c
+                            collected_cpu_temp = True
+                            has_temp = True
+                            break
+                    if not has_temp:
+                        # 当前主板不支持 ACPI ThermalZone，标记并在后续长周期探测，杜绝每秒无谓 COM RPC
+                        self._wmi_unsupported = True
+                except Exception:
+                    self._wmi_server = None
+                    self._wmi_unsupported = True

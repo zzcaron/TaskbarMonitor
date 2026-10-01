@@ -23,7 +23,7 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("TaskbarMonitor 偏好设置")
-        self.setFixedSize(430, 520)
+        self.setFixedSize(430, 550)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         # 加载当前配置
@@ -173,6 +173,11 @@ class SettingsDialog(QDialog):
         self.chk_freeze.setChecked(self.cfg.get("freeze_on_screenshot", True))
         layout_perf.addWidget(self.chk_freeze)
 
+        # 全屏游戏/观影自动隐藏
+        self.chk_fullscreen = QCheckBox("全屏游戏或视频播放时自动隐藏 (切回桌面自动恢复)", self)
+        self.chk_fullscreen.setChecked(self.cfg.get("hide_on_fullscreen", True))
+        layout_perf.addWidget(self.chk_fullscreen)
+
         # 开机自启
         self.chk_autostart = QCheckBox("跟随 Windows 开机自动启动", self)
         self.chk_autostart.setChecked(is_autostart_enabled())
@@ -223,7 +228,8 @@ class SettingsDialog(QDialog):
             "show_ram": self.chk_ram.isChecked(),
             "refresh_interval": self.cmb_freq.currentData(),
             "offset_x": self.spn_offset.value(),
-            "freeze_on_screenshot": self.chk_freeze.isChecked()
+            "freeze_on_screenshot": self.chk_freeze.isChecked(),
+            "hide_on_fullscreen": self.chk_fullscreen.isChecked()
         }
         return new_cfg
 

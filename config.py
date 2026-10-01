@@ -20,7 +20,8 @@ DEFAULT_CONFIG = {
     "show_ram": True,                 # 是否显示内存占用
     "refresh_interval": 1.0,          # 采样刷新频率（秒）
     "offset_x": -4,                   # 水平吸附微调偏移（像素）
-    "freeze_on_screenshot": True      # 截屏时自动定格暂停（支持微信/QQ/Snipaste/Win+Shift+S）
+    "freeze_on_screenshot": True,     # 截屏时自动定格暂停（支持微信/QQ/Snipaste/Win+Shift+S）
+    "hide_on_fullscreen": True        # 全屏游戏/观影播放时自动静默隐藏，退出全屏自动恢复
 }
 
 

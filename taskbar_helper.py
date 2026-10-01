@@ -238,3 +238,64 @@ def is_screenshot_active():
     return False
 
 
+class MONITORINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("rcMonitor", RECT),
+        ("rcWork", RECT),
+        ("dwFlags", wintypes.DWORD),
+    ]
+
+user32.GetMonitorInfoW.argtypes = [ctypes.c_void_p, ctypes.POINTER(MONITORINFO)]
+user32.GetMonitorInfoW.restype = wintypes.BOOL
+MONITOR_DEFAULTTONEAREST = 2
+
+
+def is_fullscreen_active():
+    """
+    毫秒级检测当前前台窗口是否处于全屏独占状态（全屏游戏、全屏观影、幻灯片放映等）
+    覆盖整个显示器屏幕包含底部任务栏区域
+    """
+    try:
+        fg = user32.GetForegroundWindow()
+        if not fg or not user32.IsWindowVisible(fg):
+            return False
+
+        cls_buf = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(fg, cls_buf, 256)
+        cls = cls_buf.value.lower()
+
+        # 忽略常规桌面与任务栏自身
+        if cls in ('progman', 'workerw', 'shell_traywnd', 'shell_secondarytraywnd'):
+            return False
+
+        # 获取前台窗口所在的物理显示器
+        h_mon = user32.MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST)
+        if not h_mon:
+            return False
+
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(MONITORINFO)
+        if not user32.GetMonitorInfoW(h_mon, ctypes.byref(mi)):
+            return False
+
+        rect = RECT()
+        user32.GetWindowRect(fg, ctypes.byref(rect))
+
+        mon_r = mi.rcMonitor
+        # 若窗口矩形覆盖或超出显示器物理边界（包含任务栏底栏：rect.bottom >= mon_r.bottom）
+        # 普通最大化常规窗口受限于工作区，rect.bottom 会小于 mon_r.bottom
+        is_covering_screen = (
+            rect.left <= mon_r.left and
+            rect.top <= mon_r.top and
+            rect.right >= mon_r.right and
+            rect.bottom >= mon_r.bottom
+        )
+        return is_covering_screen
+    except Exception:
+        pass
+
+    return False
+
+
+
