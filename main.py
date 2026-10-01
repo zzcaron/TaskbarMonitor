@@ -14,6 +14,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
 from monitor import MonitorWorker
 from ui_taskbar import TaskbarMonitorWidget
 from autostart import is_autostart_enabled, set_autostart
+from config import load_config
 
 MUTEX_NAME = "Global\\TaskbarMonitor_Deepmind_Aron_Instance"
 
@@ -44,7 +45,6 @@ def create_tray_pixmap():
 
 def main():
     # 1. 单实例互斥检查
-    user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
     h_mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
     if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
@@ -56,11 +56,14 @@ def main():
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)  # 保持后台常驻
+    app.setQuitOnLastWindowClosed(False)
 
     tray_icon_pixmap = create_tray_pixmap()
     app_icon = QIcon(tray_icon_pixmap)
     app.setWindowIcon(app_icon)
+
+    # 读取初始配置
+    cfg = load_config()
 
     # 3. 创建任务栏展示窗口
     monitor_window = TaskbarMonitorWidget()
@@ -68,16 +71,16 @@ def main():
 
     # 4. 创建系统托盘图标与上下文菜单
     tray = QSystemTrayIcon(app_icon, app)
-    tray.setToolTip("任务栏硬件与网速监控")
+    tray.setToolTip("任务栏硬件与网速监控 (双击打开设置)")
 
     tray_menu = QMenu()
     tray_menu.setStyleSheet("""
         QMenu {
-            background-color: #252526;
+            background-color: #202024;
             color: #ffffff;
             border: 1px solid #3e3e42;
             padding: 4px;
-            font-family: 'Segoe UI', 'Microsoft YaHei';
+            font-family: 'Segoe UI', 'Microsoft YaHei UI';
             font-size: 12px;
         }
         QMenu::item {
@@ -85,7 +88,7 @@ def main():
             border-radius: 3px;
         }
         QMenu::item:selected {
-            background-color: #094771;
+            background-color: #0984e3;
         }
         QMenu::separator {
             height: 1px;
@@ -94,6 +97,12 @@ def main():
         }
     """)
 
+    # 偏好设置
+    action_settings = QAction("⚙️ 偏好设置...", tray_menu)
+    action_settings.triggered.connect(monitor_window._open_settings_dialog)
+    tray_menu.addAction(action_settings)
+
+    # 开机自启
     action_autostart = QAction("开机自动启动", tray_menu, checkable=True)
     action_autostart.setChecked(is_autostart_enabled())
     action_autostart.triggered.connect(lambda chk: set_autostart(chk))
@@ -112,10 +121,13 @@ def main():
     tray_menu.addAction(action_quit)
 
     tray.setContextMenu(tray_menu)
+    # 双击托盘图标打开偏好设置
+    tray.activated.connect(lambda reason: monitor_window._open_settings_dialog() if reason == QSystemTrayIcon.DoubleClick else None)
     tray.show()
 
     # 5. 启动后台硬件采样线程
-    worker = MonitorWorker(interval=1.0)
+    refresh_sec = float(cfg.get("refresh_interval", 1.0))
+    worker = MonitorWorker(interval=refresh_sec)
     worker.metrics_updated.connect(monitor_window.update_metrics)
     worker.start()
 
