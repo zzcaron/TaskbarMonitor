@@ -19,20 +19,26 @@ from autostart import is_autostart_enabled, set_autostart
 
 
 class MetricItem(QWidget):
-    """单个监控项组件（标签 + 数值），支持双行排布"""
+    """单个监控项组件（标签 + 数值），支持高清晰度抗锯齿与高对比度排布"""
     def __init__(self, label_text, color="#ffffff", parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(3, 0, 3, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(4)
 
-        # 指标名称标签
+        # 优质抗锯齿字体配置
+        base_font = QFont("Segoe UI Variable Display", 9, QFont.Bold)
+        base_font.setStyleStrategy(QFont.PreferAntialias)
+
+        # 指标名称标签（明亮清晰高对比度）
         self.lbl_title = QLabel(label_text)
-        self.lbl_title.setStyleSheet("color: #a0a0a0; font-size: 11px; font-weight: 500;")
+        self.lbl_title.setFont(base_font)
+        self.lbl_title.setStyleSheet("color: #dcdde1; font-size: 12px; font-weight: 700; font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI';")
 
-        # 指标实时数值标签
+        # 指标实时数值标签（粗体锐利数字）
         self.lbl_value = QLabel("--")
-        self.lbl_value.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: 600; font-family: 'Consolas', 'Segoe UI', 'Microsoft YaHei';")
+        self.lbl_value.setFont(base_font)
+        self.lbl_value.setStyleSheet(f"color: {color}; font-size: 12.5px; font-weight: 700; font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI';")
 
         layout.addWidget(self.lbl_title)
         layout.addWidget(self.lbl_value)
@@ -41,7 +47,7 @@ class MetricItem(QWidget):
         """更新显示数值与可选颜色"""
         self.lbl_value.setText(text)
         if custom_color:
-            self.lbl_value.setStyleSheet(f"color: {custom_color}; font-size: 11px; font-weight: 600; font-family: 'Consolas', 'Segoe UI', 'Microsoft YaHei';")
+            self.lbl_value.setStyleSheet(f"color: {custom_color}; font-size: 12.5px; font-weight: 700; font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI';")
 
 
 class SeparatorLine(QFrame):
@@ -50,7 +56,7 @@ class SeparatorLine(QFrame):
         super().__init__(parent)
         self.setFrameShape(QFrame.VLine)
         self.setFrameShadow(QFrame.Sunken)
-        self.setStyleSheet("color: rgba(255, 255, 255, 0.15); margin-top: 6px; margin-bottom: 6px;")
+        self.setStyleSheet("color: rgba(255, 255, 255, 0.22); margin-top: 5px; margin-bottom: 5px;")
 
 
 class TaskbarMonitorWidget(QWidget):
@@ -71,11 +77,11 @@ class TaskbarMonitorWidget(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-        # 整体界面风格：任务栏深色半透明胶囊风格
+        # 整体界面风格：深色纯黑微磨砂胶囊风格，杜绝背景杂色穿透
         self.setStyleSheet("""
             QWidget#MainContainer {
-                background-color: rgba(26, 26, 28, 0.88);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background-color: rgba(16, 16, 20, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.18);
                 border-radius: 6px;
             }
         """)
@@ -99,43 +105,43 @@ class TaskbarMonitorWidget(QWidget):
         self.container = QFrame(self)
         self.container.setObjectName("MainContainer")
         container_layout = QHBoxLayout(self.container)
-        container_layout.setContentsMargins(6, 2, 6, 2)
+        container_layout.setContentsMargins(8, 2, 8, 2)
         container_layout.setSpacing(6)
 
-        # 1. 网络列 (上: 上传, 下: 下载)
+        # 1. 网络列 (上: 上传, 下: 下载) - 亮青 / 鲜翠绿
         net_col = QVBoxLayout()
         net_col.setContentsMargins(0, 0, 0, 0)
         net_col.setSpacing(1)
-        self.item_upload = MetricItem("↑", color="#00d2d3")
-        self.item_download = MetricItem("↓", color="#10ac84")
+        self.item_upload = MetricItem("↑", color="#00f2fe")
+        self.item_download = MetricItem("↓", color="#2ed573")
         net_col.addWidget(self.item_upload)
         net_col.addWidget(self.item_download)
 
-        # 2. 磁盘列 (上: 读, 下: 写)
+        # 2. 磁盘列 (上: 读, 下: 写) - 亮琥珀金 / 活力亮橙
         disk_col = QVBoxLayout()
         disk_col.setContentsMargins(0, 0, 0, 0)
         disk_col.setSpacing(1)
-        self.item_disk_read = MetricItem("读", color="#feca57")
+        self.item_disk_read = MetricItem("读", color="#ffd32a")
         self.item_disk_write = MetricItem("写", color="#ff9f43")
         disk_col.addWidget(self.item_disk_read)
         disk_col.addWidget(self.item_disk_write)
 
-        # 3. CPU 列 (上: 占用与温度)
-        # 4. GPU 列 (下: 占用与温度)
+        # 3. CPU 列 (上: 占用与温度) - 醒目珊瑚红
+        # 4. GPU 列 (下: 占用与温度) - 晴空亮蓝
         chip_col = QVBoxLayout()
         chip_col.setContentsMargins(0, 0, 0, 0)
         chip_col.setSpacing(1)
-        self.item_cpu = MetricItem("CPU", color="#ff6b6b")
-        self.item_gpu = MetricItem("GPU", color="#54a0ff")
+        self.item_cpu = MetricItem("CPU", color="#ff4d4d")
+        self.item_gpu = MetricItem("GPU", color="#4bcffa")
         chip_col.addWidget(self.item_cpu)
         chip_col.addWidget(self.item_gpu)
 
-        # 5. 内存列
+        # 5. 内存列 - 极光紫 / 高亮纯白
         ram_col = QVBoxLayout()
         ram_col.setContentsMargins(0, 0, 0, 0)
         ram_col.setSpacing(1)
-        self.item_ram = MetricItem("RAM", color="#5f27cd")
-        self.item_ram_val = MetricItem("已用", color="#c8d6e5")
+        self.item_ram = MetricItem("RAM", color="#ef5777")
+        self.item_ram_val = MetricItem("已用", color="#ffffff")
         ram_col.addWidget(self.item_ram)
         ram_col.addWidget(self.item_ram_val)
 
@@ -150,8 +156,8 @@ class TaskbarMonitorWidget(QWidget):
 
         outer_layout.addWidget(self.container)
 
-        # 预设合理尺寸
-        self.resize(360, 44)
+        # 预设合理尺寸（字号放大后拓宽至 390px 保证各数值舒展）
+        self.resize(390, 44)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -179,14 +185,14 @@ class TaskbarMonitorWidget(QWidget):
         self.item_disk_read.set_value(format_bytes_speed(m.disk_read_speed))
         self.item_disk_write.set_value(format_bytes_speed(m.disk_write_speed))
 
-        # 3. CPU 占用与温度
+        # 3. CPU 占用与温度（明亮粉红/珊瑚红，高温警示亮红）
         cpu_temp_str = f"{int(m.cpu_temp)}℃" if m.cpu_temp > 0 else ""
-        cpu_color = "#ff4757" if m.cpu_temp >= 75 else "#ff6b6b"
+        cpu_color = "#ff3838" if m.cpu_temp >= 75 else "#ff4d4d"
         self.item_cpu.set_value(f"{int(m.cpu_usage)}% {cpu_temp_str}".strip(), cpu_color)
 
-        # 4. GPU 占用与温度
+        # 4. GPU 占用与温度（明亮晴空蓝，高温警示亮红）
         gpu_temp_str = f"{int(m.gpu_temp)}℃" if m.gpu_temp > 0 else ""
-        gpu_color = "#ff4757" if m.gpu_temp >= 75 else "#54a0ff"
+        gpu_color = "#ff3838" if m.gpu_temp >= 75 else "#4bcffa"
         self.item_gpu.set_value(f"{int(m.gpu_usage)}% {gpu_temp_str}".strip(), gpu_color)
 
         # 5. 内存

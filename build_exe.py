@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-打包脚本：使用 PyInstaller 将任务栏监控工具打包为单文件绿色版可执行文件
+打包脚本：使用 PyInstaller 将任务栏监控工具打包为 TaskbarMonitor-V1.1.exe
 中间生成文件与缓存自动存储在根目录 cache 文件夹下
 """
 
@@ -18,7 +18,7 @@ os.makedirs(cache_dir, exist_ok=True)
 libre_pkg_dir = os.path.dirname(PyLibreHardwareMonitorLib.__file__)
 dll_dir = os.path.join(libre_pkg_dir, "dll")
 
-# 输出目录
+# 输出目录与名称
 dist_dir = os.path.join(current_dir, "dist")
 build_dir = os.path.join(cache_dir, "pyinstaller_build")
 spec_dir = os.path.join(cache_dir, "pyinstaller_spec")
@@ -30,7 +30,7 @@ cmd = [
     "-m", "PyInstaller",
     "--noconsole",
     "--onedir",
-    "--name=TaskbarMonitor",
+    "--name=TaskbarMonitor-V1.1",
     f"--distpath={dist_dir}",
     f"--workpath={build_dir}",
     f"--specpath={spec_dir}",
@@ -42,9 +42,10 @@ cmd = [
     main_py
 ]
 
-print("开始打包程序...")
+print("开始打包 TaskbarMonitor-V1.1...")
 result = subprocess.run(cmd)
 if result.returncode == 0:
-    print("\n✅ 打包成功！生成目录:", os.path.join(dist_dir, "TaskbarMonitor"))
+    target_exe = os.path.join(dist_dir, "TaskbarMonitor-V1.1", "TaskbarMonitor-V1.1.exe")
+    print(f"\n[打包成功] 生成可执行文件: {target_exe}")
 else:
-    print("\n❌ 打包失败，退出码:", result.returncode)
+    print(f"\n[打包失败] 退出码: {result.returncode}")

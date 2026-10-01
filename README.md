@@ -38,7 +38,7 @@
 
 - **方式一（免安装绿色版，推荐）**：
   直接双击运行：
-  `TaskbarMonitor\dist\TaskbarMonitor\TaskbarMonitor.exe`
+  `TaskbarMonitor\dist\TaskbarMonitor-V1.1\TaskbarMonitor-V1.1.exe`
   或双击项目目录下的：
   `启动软件.bat`
 
