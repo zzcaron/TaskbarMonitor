@@ -2,7 +2,7 @@
 chcp 65001 >nul
 title 启动任务栏硬件监控
 
-set "EXE_PATH=%~dp0dist\TaskbarMonitor-V1.1\TaskbarMonitor-V1.1.exe"
+set "EXE_PATH=%~dp0dist\TaskbarMonitor-V1.2\TaskbarMonitor-V1.2.exe"
 
 if exist "%EXE_PATH%" (
     start "" "%EXE_PATH%"
