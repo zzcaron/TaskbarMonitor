@@ -21,28 +21,32 @@ from ui_settings import SettingsDialog
 
 
 class MetricItem(QWidget):
-    """单个监控项组件（标签 + 数值），支持高清晰度抗锯齿与深色文字投影"""
-    def __init__(self, label_text, color="#ffffff", parent=None):
+    """单个监控项组件（标签 + 数值），支持固定列宽防抖动、高清晰度抗锯齿与深色文字投影"""
+    def __init__(self, label_text, color="#ffffff", title_width=None, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(3, 0, 3, 0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
         base_font = QFont("Segoe UI Variable Display", 9, QFont.Bold)
         base_font.setStyleStrategy(QFont.PreferAntialias)
 
-        # 指标标题标签
+        # 指标标题标签（支持定宽避免任何抖动）
         self.lbl_title = QLabel(label_text)
         self.lbl_title.setFont(base_font)
+        if title_width:
+            self.lbl_title.setFixedWidth(title_width)
         self.lbl_title.setStyleSheet("color: #dcdde1; font-size: 12px; font-weight: 700; font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI';")
 
-        # 指标数值标签
+        # 指标数值标签（左对齐，预留充足展示位，数值变化绝不推移后方控件）
         self.lbl_value = QLabel("--")
         self.lbl_value.setFont(base_font)
+        self.lbl_value.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.lbl_value.setStyleSheet(f"color: {color}; font-size: 12.5px; font-weight: 700; font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI';")
 
         layout.addWidget(self.lbl_title)
         layout.addWidget(self.lbl_value)
+        layout.addStretch()
 
         self.shadow_title = None
         self.shadow_value = None
@@ -132,43 +136,47 @@ class TaskbarMonitorWidget(QWidget):
         self.container_layout.setContentsMargins(8, 2, 8, 2)
         self.container_layout.setSpacing(6)
 
-        # 1. 网络列 (上: 上传, 下: 下载)
+        # 1. 网络列 (定宽 86px，数值无论如何变化绝对不抖动推移后方控件)
         self.net_col_widget = QWidget(self)
+        self.net_col_widget.setFixedWidth(86)
         net_col = QVBoxLayout(self.net_col_widget)
         net_col.setContentsMargins(0, 0, 0, 0)
         net_col.setSpacing(1)
-        self.item_upload = MetricItem("↑", color="#00f2fe")
-        self.item_download = MetricItem("↓", color="#2ed573")
+        self.item_upload = MetricItem("↑", color="#00f2fe", title_width=12)
+        self.item_download = MetricItem("↓", color="#2ed573", title_width=12)
         net_col.addWidget(self.item_upload)
         net_col.addWidget(self.item_download)
 
-        # 2. 磁盘列 (上: 读, 下: 写)
+        # 2. 磁盘列 (定宽 92px)
         self.disk_col_widget = QWidget(self)
+        self.disk_col_widget.setFixedWidth(92)
         disk_col = QVBoxLayout(self.disk_col_widget)
         disk_col.setContentsMargins(0, 0, 0, 0)
         disk_col.setSpacing(1)
-        self.item_disk_read = MetricItem("读", color="#ffd32a")
-        self.item_disk_write = MetricItem("写", color="#ff9f43")
+        self.item_disk_read = MetricItem("读", color="#ffd32a", title_width=16)
+        self.item_disk_write = MetricItem("写", color="#ff9f43", title_width=16)
         disk_col.addWidget(self.item_disk_read)
         disk_col.addWidget(self.item_disk_write)
 
-        # 3. 核心硬件列 (上: CPU, 下: GPU)
+        # 3. 核心硬件列 (定宽 106px)
         self.chip_col_widget = QWidget(self)
+        self.chip_col_widget.setFixedWidth(106)
         chip_col = QVBoxLayout(self.chip_col_widget)
         chip_col.setContentsMargins(0, 0, 0, 0)
         chip_col.setSpacing(1)
-        self.item_cpu = MetricItem("CPU", color="#ff4d4d")
-        self.item_gpu = MetricItem("GPU", color="#4bcffa")
+        self.item_cpu = MetricItem("CPU", color="#ff4d4d", title_width=28)
+        self.item_gpu = MetricItem("GPU", color="#4bcffa", title_width=28)
         chip_col.addWidget(self.item_cpu)
         chip_col.addWidget(self.item_gpu)
 
-        # 4. 内存列
+        # 4. 内存列 (定宽 68px)
         self.ram_col_widget = QWidget(self)
+        self.ram_col_widget.setFixedWidth(68)
         ram_col = QVBoxLayout(self.ram_col_widget)
         ram_col.setContentsMargins(0, 0, 0, 0)
         ram_col.setSpacing(1)
-        self.item_ram = MetricItem("RAM", color="#ef5777")
-        self.item_ram_val = MetricItem("已用", color="#ffffff")
+        self.item_ram = MetricItem("RAM", color="#ef5777", title_width=28)
+        self.item_ram_val = MetricItem("已用", color="#ffffff", title_width=28)
         ram_col.addWidget(self.item_ram)
         ram_col.addWidget(self.item_ram_val)
 
@@ -223,14 +231,18 @@ class TaskbarMonitorWidget(QWidget):
             item.set_shadow_enabled(enable_shadow)
 
     def update_layout_visibility(self):
-        """根据当前配置智能收缩/展示各监控列，并动态调整窗口宽度自适应吸附"""
+        """
+        根据当前配置智能缩进与展示各监控列：
+        各列具有严格固定宽度，数值变动绝不引起位置推移；
+        当且仅当用户取消勾选某个项目时，后方项目才自动向左缩进。
+        """
         show_net = self.cfg.get("show_net", True)
         show_disk = self.cfg.get("show_disk", True)
         show_cpu = self.cfg.get("show_cpu", True)
         show_gpu = self.cfg.get("show_gpu", True)
         show_ram = self.cfg.get("show_ram", True)
 
-        # 控制单个 item 与整列显示
+        # 1. 控制各列显示与隐藏
         self.net_col_widget.setVisible(show_net)
         self.disk_col_widget.setVisible(show_disk)
 
@@ -240,33 +252,37 @@ class TaskbarMonitorWidget(QWidget):
 
         self.ram_col_widget.setVisible(show_ram)
 
-        # 智能动态计算总宽度
-        total_width = 18  # 基础 padding
-        active_cols = []
+        # 2. 精确固定列宽映射
+        COL_WIDTHS = {
+            "net": 86,
+            "disk": 92,
+            "chip": 106,
+            "ram": 68
+        }
 
+        active_cols = []
         if show_net:
-            total_width += 85
             active_cols.append("net")
         if show_disk:
-            total_width += 85
             active_cols.append("disk")
         if show_cpu or show_gpu:
-            total_width += 95
             active_cols.append("chip")
         if show_ram:
-            total_width += 65
             active_cols.append("ram")
 
-        # 动态控制分割线
+        # 3. 动态控制分割线可见性
         self.sep1.setVisible("net" in active_cols and len(active_cols) > 1 and active_cols[-1] != "net")
         self.sep2.setVisible("disk" in active_cols and ("chip" in active_cols or "ram" in active_cols))
         self.sep3.setVisible("chip" in active_cols and "ram" in active_cols)
 
-        # 加上实际显示的分割线宽度
-        total_width += (max(0, len(active_cols) - 1)) * 6
+        # 4. 精确计算总宽度并平滑吸附任务栏
+        total_width = 16  # 容器左右 padding 边距
+        for col in active_cols:
+            total_width += COL_WIDTHS[col]
+        if len(active_cols) > 1:
+            total_width += (len(active_cols) - 1) * 6  # 分割线间隙
 
-        # 至少保证合理最小宽度
-        target_w = max(100, total_width)
+        target_w = max(80, total_width)
         self.resize(target_w, 44)
         self.align_to_taskbar()
 
