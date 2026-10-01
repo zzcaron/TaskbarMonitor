@@ -5,14 +5,19 @@ Windows 任务栏与系统托盘定位辅助模块
 """
 
 import ctypes
-from ctypes import wintypes
+import ctypes.wintypes as wintypes
 import win32gui
 import win32con
 
 user32 = ctypes.windll.user32
 
-# 64位系统兼容的 SetWindowLongPtr 函数
-SetWindowLongPtr = getattr(user32, 'SetWindowLongPtrW', user32.SetWindowLongW)
+# 严谨声明 64 位 SetWindowPos 函数原型，杜绝 64 位 HWND 参数截断引发 1400 错误
+user32.SetWindowPos.argtypes = [
+    wintypes.HWND, wintypes.HWND,
+    ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+    ctypes.c_uint
+]
+user32.SetWindowPos.restype = wintypes.BOOL
 
 
 class RECT(ctypes.Structure):
@@ -54,7 +59,7 @@ def calculate_window_rect(widget_width, offset_x=-4):
     """
     h_tray, tray_rect, notify_rect = get_taskbar_info()
     if not tray_rect:
-        # 若未找到任务栏，返回屏幕右下角默认位置
+        # 若未找到任务栏，返回主屏幕右下角任务栏常规高度
         screen_w = user32.GetSystemMetrics(0)
         screen_h = user32.GetSystemMetrics(1)
         return screen_w - widget_width - 320, screen_h - 48, widget_width, 48
@@ -81,23 +86,15 @@ def setup_taskbar_window_style(hwnd):
     1. WS_EX_TOOLWINDOW: 工具窗口，不产生任务栏按钮，不入 Alt+Tab
     2. WS_EX_NOACTIVATE: 鼠标交互不抢占前台焦点（打字/全屏/游戏无干扰）
     3. WS_EX_TOPMOST: 强力置顶
-    4. GWL_HWNDPARENT: 绑定 Shell_TrayWnd 为所有者（Owner），使 Windows 窗口管理器
-       保证小部件永远渲染在任务栏的上层，点击任务栏图标绝不消失
     """
     try:
-        # 1. 设置扩展样式
         ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
         ex_style |= win32con.WS_EX_TOOLWINDOW
         ex_style |= win32con.WS_EX_NOACTIVATE
         ex_style |= win32con.WS_EX_TOPMOST
         win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex_style)
 
-        # 2. 绑定任务栏作为 Owner Window
-        h_tray = user32.FindWindowW("Shell_TrayWnd", None)
-        if h_tray:
-            SetWindowLongPtr(hwnd, win32con.GWL_HWNDPARENT, h_tray)
-
-        # 3. 初始置顶与展现
+        # 初始强力置顶
         HWND_TOPMOST = -1
         SWP_NOMOVE = 0x0002
         SWP_NOSIZE = 0x0001

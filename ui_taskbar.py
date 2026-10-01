@@ -175,11 +175,15 @@ class TaskbarMonitorWidget(QWidget):
         self.align_to_taskbar()
 
     def align_to_taskbar(self):
-        """对齐到任务栏托盘左边缘并强力维持置顶防遮挡"""
+        """精准对齐到任务栏托盘左边缘并强力维持置顶防遮挡"""
         x, y, w, h = calculate_window_rect(self.width(), self.offset_x)
         margin_y = max(1, (h - self.height()) // 2)
         real_y = y + margin_y
 
+        # 1. 先通过 Qt 原生移动到目标屏幕坐标
+        self.move(x, real_y)
+
+        # 2. 再调用底层 Windows API 强力维持 HWND_TOPMOST 顶层状态
         hwnd = int(self.winId())
         if hwnd:
             import ctypes
@@ -192,8 +196,6 @@ class TaskbarMonitorWidget(QWidget):
                 x, real_y, self.width(), self.height(),
                 SWP_NOACTIVATE | SWP_SHOWWINDOW
             )
-        else:
-            self.move(x, real_y)
 
     def update_metrics(self, m):
         """接收后台采样的系统指标并刷新 UI"""
