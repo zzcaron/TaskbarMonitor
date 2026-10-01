@@ -23,7 +23,7 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("TaskbarMonitor 偏好设置")
-        self.setFixedSize(420, 480)
+        self.setFixedSize(430, 520)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         # 加载当前配置
@@ -168,6 +168,11 @@ class SettingsDialog(QDialog):
         h_offset.addWidget(self.spn_offset)
         layout_perf.addLayout(h_offset)
 
+        # 截屏时自动定格
+        self.chk_freeze = QCheckBox("截屏时自动定格暂停 (微信/QQ/Snipaste/Win+Shift+S 等)", self)
+        self.chk_freeze.setChecked(self.cfg.get("freeze_on_screenshot", True))
+        layout_perf.addWidget(self.chk_freeze)
+
         # 开机自启
         self.chk_autostart = QCheckBox("跟随 Windows 开机自动启动", self)
         self.chk_autostart.setChecked(is_autostart_enabled())
@@ -217,7 +222,8 @@ class SettingsDialog(QDialog):
             "show_gpu": self.chk_gpu.isChecked(),
             "show_ram": self.chk_ram.isChecked(),
             "refresh_interval": self.cmb_freq.currentData(),
-            "offset_x": self.spn_offset.value()
+            "offset_x": self.spn_offset.value(),
+            "freeze_on_screenshot": self.chk_freeze.isChecked()
         }
         return new_cfg
 

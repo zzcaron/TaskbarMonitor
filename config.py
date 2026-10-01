@@ -19,7 +19,8 @@ DEFAULT_CONFIG = {
     "show_gpu": True,                 # 是否显示 GPU 占用与温度
     "show_ram": True,                 # 是否显示内存占用
     "refresh_interval": 1.0,          # 采样刷新频率（秒）
-    "offset_x": -4                    # 水平吸附微调偏移（像素）
+    "offset_x": -4,                   # 水平吸附微调偏移（像素）
+    "freeze_on_screenshot": True      # 截屏时自动定格暂停（支持微信/QQ/Snipaste/Win+Shift+S）
 }
 
 

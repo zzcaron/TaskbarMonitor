@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal
 from PyQt5.QtGui import QFont, QCursor, QColor
 
 from monitor import format_bytes_speed
-from taskbar_helper import calculate_window_rect, setup_taskbar_window_style
+from taskbar_helper import calculate_window_rect, setup_taskbar_window_style, is_screenshot_active
 from autostart import is_autostart_enabled, set_autostart
 from config import load_config, save_config
 from ui_settings import SettingsDialog
@@ -293,6 +293,10 @@ class TaskbarMonitorWidget(QWidget):
 
     def align_to_taskbar(self):
         """精准对齐到任务栏托盘左边缘并强力维持置顶防遮挡"""
+        # 若处于截屏状态且开启了截屏定格，避免抢占置顶破坏截图遮罩
+        if self.cfg.get("freeze_on_screenshot", True) and is_screenshot_active():
+            return
+
         x, y, w, h = calculate_window_rect(self.width(), self.offset_x)
         margin_y = max(1, (h - self.height()) // 2)
         real_y = y + margin_y
@@ -316,6 +320,10 @@ class TaskbarMonitorWidget(QWidget):
 
     def update_metrics(self, m):
         """接收后台采样的系统指标并刷新 UI"""
+        # 截屏时自动定格：如果系统正处于截图状态，跳过数值刷新，保持当前画面定格
+        if self.cfg.get("freeze_on_screenshot", True) and is_screenshot_active():
+            return
+
         self.latest_metrics = m
 
         # 1. 网络
@@ -448,6 +456,12 @@ class TaskbarMonitorWidget(QWidget):
         action_settings.triggered.connect(self._open_settings_dialog)
         menu.addAction(action_settings)
 
+        # 截屏时自动定格
+        action_freeze = QAction("截屏时自动定格暂停", menu, checkable=True)
+        action_freeze.setChecked(self.cfg.get("freeze_on_screenshot", True))
+        action_freeze.triggered.connect(self._toggle_freeze_screenshot)
+        menu.addAction(action_freeze)
+
         # 开机自启
         action_autostart = QAction("开机自动启动", menu, checkable=True)
         action_autostart.setChecked(is_autostart_enabled())
@@ -478,6 +492,11 @@ class TaskbarMonitorWidget(QWidget):
         self.cfg[key] = checked
         save_config(self.cfg)
         self.update_layout_visibility()
+
+    def _toggle_freeze_screenshot(self, checked):
+        """快捷切换截屏定格"""
+        self.cfg["freeze_on_screenshot"] = checked
+        save_config(self.cfg)
 
     def _set_bg_style(self, style_name):
         """快捷切换背景模式"""

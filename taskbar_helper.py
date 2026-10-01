@@ -107,3 +107,56 @@ def setup_taskbar_window_style(hwnd):
         )
     except Exception as e:
         print(f"[任务栏辅助] 配置防覆盖样式失败: {e}")
+
+
+# 常见截图工具进程名单
+SCREENSHOT_PROCESSES = {
+    'screenclippinghost.exe',  # Win11/10 自带截图 (Win+Shift+S)
+    'snippingtool.exe',        # Windows 截图工具
+    'snipaste.exe',            # Snipaste 截图
+    'pixpin.exe',              # PixPin 截图
+    'flameshot.exe',           # Flameshot
+    'sharex.exe'               # ShareX
+}
+
+# 常见截图窗口类名与标题关键词
+SCREENSHOT_KEYWORDS = ('capture', 'screenclip', 'snip', 'screenshot')
+
+
+def is_screenshot_active():
+    """
+    毫秒级检测当前系统是否正处于截屏定格状态
+    支持：微信截图 (Alt+A)、QQ截图 (Ctrl+Alt+A)、Win11自带截图 (Win+Shift+S)、Snipaste、PixPin等
+    """
+    fg = user32.GetForegroundWindow()
+    if not fg:
+        return False
+
+    try:
+        # 1. 检查窗口类名与标题
+        cls = win32gui.GetClassName(fg).lower()
+        title = win32gui.GetWindowText(fg).lower()
+        if any(k in cls for k in SCREENSHOT_KEYWORDS) or any(k in title for k in SCREENSHOT_KEYWORDS):
+            return True
+
+        # 2. 检查前台进程名
+        import win32process
+        import psutil
+        _, pid = win32process.GetWindowThreadProcessId(fg)
+        pname = psutil.Process(pid).name().lower()
+        if pname in SCREENSHOT_PROCESSES:
+            return True
+
+        # 3. 检查微信/QQ 等全屏截图遮罩
+        if pname in ('wechat.exe', 'wechatappex.exe', 'qq.exe'):
+            r = win32gui.GetWindowRect(fg)
+            sw = user32.GetSystemMetrics(0)
+            sh = user32.GetSystemMetrics(1)
+            # 全屏覆盖且左上角在 (0,0) 或负坐标
+            if r[0] <= 0 and r[1] <= 0 and r[2] >= sw and r[3] >= sh:
+                return True
+    except Exception:
+        pass
+
+    return False
+
