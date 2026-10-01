@@ -28,6 +28,7 @@ main_py = os.path.join(current_dir, "main.py")
 cmd = [
     sys.executable,
     "-m", "PyInstaller",
+    "-y",
     "--noconsole",
     "--onedir",
     "--name=TaskbarMonitor-V1.1",

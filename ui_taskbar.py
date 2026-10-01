@@ -68,12 +68,13 @@ class TaskbarMonitorWidget(QWidget):
         self.offset_x = -4
         self.drag_start_pos = None
 
-        # 初始化无边框、置顶、任务栏工具样式
+        # 初始化无边框、置顶、任务栏工具样式（去掉 SubWindow，加入 Window 和免焦点）
         self.setWindowFlags(
+            Qt.Window |
             Qt.FramelessWindowHint |
             Qt.WindowStaysOnTopHint |
             Qt.Tool |
-            Qt.SubWindow
+            Qt.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
@@ -88,13 +89,21 @@ class TaskbarMonitorWidget(QWidget):
 
         self._init_ui()
 
-        # 定位定时器：自动检测托盘变动并对齐
+        # 定位定时器：自动检测托盘变动并强力维持置顶
         self.pos_timer = QTimer(self)
         self.pos_timer.timeout.connect(self.align_to_taskbar)
-        self.pos_timer.start(2000)
+        self.pos_timer.start(1000)
 
         # 存储当前最新监控指标用于 Tooltip 显示
         self.latest_metrics = None
+
+    def changeEvent(self, event):
+        """防止按 Win+D 或点击任务栏时被系统异常最小化或掩盖"""
+        if event.type() == event.WindowStateChange:
+            if self.isMinimized():
+                self.showNormal()
+                self.align_to_taskbar()
+        super().changeEvent(event)
 
     def _init_ui(self):
         # 外层布局
@@ -166,12 +175,25 @@ class TaskbarMonitorWidget(QWidget):
         self.align_to_taskbar()
 
     def align_to_taskbar(self):
-        """对齐到任务栏托盘左边缘"""
+        """对齐到任务栏托盘左边缘并强力维持置顶防遮挡"""
         x, y, w, h = calculate_window_rect(self.width(), self.offset_x)
-        # 居中垂直摆放
         margin_y = max(1, (h - self.height()) // 2)
         real_y = y + margin_y
-        self.move(x, real_y)
+
+        hwnd = int(self.winId())
+        if hwnd:
+            import ctypes
+            user32 = ctypes.windll.user32
+            HWND_TOPMOST = -1
+            SWP_NOACTIVATE = 0x0010
+            SWP_SHOWWINDOW = 0x0040
+            user32.SetWindowPos(
+                hwnd, HWND_TOPMOST,
+                x, real_y, self.width(), self.height(),
+                SWP_NOACTIVATE | SWP_SHOWWINDOW
+            )
+        else:
+            self.move(x, real_y)
 
     def update_metrics(self, m):
         """接收后台采样的系统指标并刷新 UI"""
