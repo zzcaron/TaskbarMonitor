@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QMenu, QAction, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal
-from PyQt5.QtGui import QFont, QCursor, QColor
+from PyQt5.QtGui import QFont, QCursor, QColor, QPainter
 
 from monitor import format_bytes_speed
 from taskbar_helper import calculate_window_rect, setup_taskbar_window_style, is_screenshot_active, is_fullscreen_active
@@ -209,10 +209,11 @@ class TaskbarMonitorWidget(QWidget):
         enable_shadow = self.cfg.get("enable_shadow", True)
 
         if bg_style == "transparent":
-            # 完全透明原生悬浮：无黑框，文字像系统原生部件直接漂在任务栏上
+            # 完全透明原生悬浮：采用 #01000000（Alpha极低实体像素），视觉100%完全透明无黑框，
+            # 但彻底杜绝 Windows DWM 将 Alpha=0 视作穿透区域从而点击空白处穿透到底层任务栏的问题
             self.container.setStyleSheet("""
                 QFrame#MainContainer {
-                    background-color: transparent;
+                    background-color: #01000000;
                     border: none;
                 }
             """)
@@ -285,6 +286,15 @@ class TaskbarMonitorWidget(QWidget):
         target_w = max(80, total_width)
         self.resize(target_w, 44)
         self.align_to_taskbar()
+
+    def paintEvent(self, event):
+        """
+        绘制基础透明背景：填充 Alpha=1 微弱不透明度（肉眼完全透明 100%），
+        彻底杜绝 Windows DWM 将 Alpha=0 像素判定为穿透区域从而将鼠标事件穿透到任务栏的问题。
+        """
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -408,6 +418,7 @@ class TaskbarMonitorWidget(QWidget):
             self._has_dragged = False
         elif event.button() == Qt.RightButton:
             self.show_context_menu(event.globalPos())
+            event.accept()
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton and self.drag_start_pos:
@@ -439,6 +450,11 @@ class TaskbarMonitorWidget(QWidget):
         """双击打开任务管理器"""
         if event.button() == Qt.LeftButton:
             subprocess.Popen("taskmgr.exe")
+
+    def contextMenuEvent(self, event):
+        """标准右键上下文菜单事件：确保无论右键点击在子控件还是父窗口空白处，均稳定弹出程序菜单"""
+        self.show_context_menu(event.globalPos())
+        event.accept()
 
     def show_context_menu(self, pos):
         """右键快捷设置菜单"""
