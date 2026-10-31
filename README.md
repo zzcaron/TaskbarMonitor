@@ -33,7 +33,7 @@
 
 ## 🚀 启动方式
 
-- **方式一（单文件独立绿色版，推荐发给别人直接双击）**：
+- **方式一（单文件独立绿色版）**：
   直接双击运行：
   `TaskbarMonitor\dist\TaskbarMonitor.exe`
   或直接前往 GitHub 仓库右侧的 [Releases](https://github.com/zzcaron/TaskbarMonitor/releases) 下载最新 `TaskbarMonitor.exe`
