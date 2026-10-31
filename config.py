@@ -5,9 +5,39 @@
 """
 
 import os
+import sys
 import json
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+def get_config_path():
+    """
+    获取配置文件路径：
+    1. 打包为单文件 exe 运行时，定位真实 exe 所在目录，而非临时解压目录 _MEIxxxx；
+    2. 优先在 exe 同级目录读写 config.json（纯绿色便携模式）；
+    3. 若处于受限目录（如 Program Files 等无写权限），自动平滑降级至 AppData 目录，保证配置绝不丢失。
+    """
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    primary_cfg = os.path.join(base_dir, "config.json")
+
+    # 检测当前目录写入权限
+    try:
+        test_file = primary_cfg if os.path.exists(primary_cfg) else os.path.join(base_dir, ".write_test")
+        with open(test_file, "a", encoding="utf-8") as f:
+            pass
+        if not os.path.exists(primary_cfg) and os.path.exists(test_file):
+            os.remove(test_file)
+        return primary_cfg
+    except (OSError, PermissionError):
+        appdata_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "TaskbarMonitor")
+        os.makedirs(appdata_dir, exist_ok=True)
+        return os.path.join(appdata_dir, "config.json")
+
+
+CONFIG_FILE = get_config_path()
 
 # 默认配置项
 DEFAULT_CONFIG = {

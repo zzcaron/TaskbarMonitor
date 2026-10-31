@@ -33,13 +33,15 @@
 
 ## 🚀 启动方式
 
-- **方式一（免安装绿色版，推荐）**：
-  双击项目目录下的：
-  `启动软件.bat`
+- **方式一（单文件独立绿色版，推荐发给别人直接双击）**：
+  直接双击运行：
+  `TaskbarMonitor\dist\TaskbarMonitor.exe`
+  或直接前往 GitHub 仓库右侧的 [Releases](https://github.com/zzcaron/TaskbarMonitor/releases) 下载最新 `TaskbarMonitor.exe`
+  *单文件免解压、无任何外部文件夹依赖，发给好友双击即可直接运行！*
 
-- **方式二（Python 源码静默运行）**：
+- **方式二（Python 源码环境运行）**：
   双击运行：
-  `运行软件.vbs`
+  `运行软件.vbs` 或在终端执行 `python main.py`
 
 ---
 

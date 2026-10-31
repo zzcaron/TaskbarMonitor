@@ -7,6 +7,7 @@
 import sys
 import os
 import ctypes
+import multiprocessing
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
@@ -58,8 +59,18 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
-    tray_icon_pixmap = create_tray_pixmap()
-    app_icon = QIcon(tray_icon_pixmap)
+    # 优先加载高分辨率应用图标
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_icon.ico")
+    if getattr(sys, 'frozen', False):
+        mei_icon = os.path.join(getattr(sys, '_MEIPASS', ''), "app_icon.ico")
+        if os.path.exists(mei_icon):
+            icon_path = mei_icon
+
+    if os.path.exists(icon_path):
+        app_icon = QIcon(icon_path)
+    else:
+        tray_icon_pixmap = create_tray_pixmap()
+        app_icon = QIcon(tray_icon_pixmap)
     app.setWindowIcon(app_icon)
 
     # 读取初始配置
@@ -143,4 +154,5 @@ def main():
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()
