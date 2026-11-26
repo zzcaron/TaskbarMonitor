@@ -1,0 +1,7 @@
+PyQt5>=5.15.9
+psutil>=5.9.8
+pywin32>=306
+PyLibreHardwareMonitor>=0.2.0
+
+# 打包依赖（仅在执行 build_exe.py 时需要）
+pyinstaller>=6.3.0
